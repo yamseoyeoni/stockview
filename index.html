@@ -481,7 +481,90 @@ const MOCK_STOCKS = [
     ]},
 ];
 
+/* ============================================================
+   실제 DART 데이터 (2024년 연결재무제표 기준, 삼성전자)
+   출처: opendart.fss.or.kr API 직접 조회 결과
+   ============================================================ */
+const REAL_FINANCIALS = {
+  samsung: {
+    부채총계: 112339878000000,
+    자본총계: 402192070000000,
+    유동자산: 227062266000000,
+    유동부채: 93326299000000,
+    매출액: 300870903000000,
+    매출액_전년: 258935494000000,
+    영업이익: 32725961000000,
+    당기순이익: 34451351000000,
+  }
+};
+
+/* ============================================================
+   재무비율 계산
+   ============================================================ */
+function calcRatios(f){
+  const 부채비율 = (f.부채총계 / f.자본총계) * 100;
+  const 유동비율 = (f.유동자산 / f.유동부채) * 100;
+  const 영업이익률 = (f.영업이익 / f.매출액) * 100;
+  const ROE = (f.당기순이익 / f.자본총계) * 100;
+  const 매출성장률 = ((f.매출액 - f.매출액_전년) / f.매출액_전년) * 100;
+  return { 부채비율, 유동비율, 영업이익률, ROE, 매출성장률 };
+}
+
+/* 시그모이드 함수: 1 / (1 + e^-x)  — 수학동아리 발표 내용과 동일한 함수 사용 */
+function sigmoid(x){
+  return 1 / (1 + Math.exp(-x));
+}
+
+function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+
+/* ============================================================
+   재무비율 → 건전성 점수 / 상승확률 계산
+   각 항목을 0~100 점수로 정규화한 뒤, 가중 합산하여 종합 점수 산출.
+   상승 가능성(%)은 정규화 이전의 원시 지표들을 선형결합(z)한 뒤
+   시그모이드 함수에 통과시켜 0~100% 확률로 변환.
+   ============================================================ */
+function calcScore(ratios){
+  const 안정성 = clamp(100 - ratios.부채비율 * 0.8, 0, 100);
+  const 유동성 = clamp(ratios.유동비율 / 2.5, 0, 100);
+  const 수익성 = clamp(ratios.ROE * 5 + ratios.영업이익률 * 3, 0, 100);
+  const 성장성 = clamp(ratios.매출성장률 * 4, 0, 100);
+
+  const 건전성점수 = Math.round((안정성 + 유동성 + 수익성 + 성장성) / 4);
+
+  // 시그모이드 기반 상승 가능성 계산 (가중치는 임의 설정한 예시 모델)
+  const z = 0.15*ratios.ROE + 0.10*ratios.영업이익률 + 0.08*ratios.매출성장률
+           - 0.05*ratios.부채비율 + 0.02*ratios.유동비율 - 6;
+  const 상승가능성 = Math.round(sigmoid(z) * 100);
+
+  let grade = '주의';
+  if(건전성점수 >= 85) grade = '매우 우수';
+  else if(건전성점수 >= 70) grade = '우수';
+  else if(건전성점수 >= 50) grade = '양호';
+
+  return {
+    score: 건전성점수, grade, prob: 상승가능성,
+    metrics: { 안정성: Math.round(안정성), 수익성: Math.round(수익성), 성장성: Math.round(성장성), 유동성: Math.round(유동성) }
+  };
+}
+
+/* 삼성전자는 실제 DART 데이터로 덮어쓰기 (나머지 기업은 아직 목업) */
+const samsungRatios = calcRatios(REAL_FINANCIALS.samsung);
+const samsungScore = calcScore(samsungRatios);
+const samsungEntry = MOCK_STOCKS.find(s => s.id === 'samsung');
+samsungEntry.score = samsungScore.score;
+samsungEntry.grade = samsungScore.grade;
+samsungEntry.prob = samsungScore.prob;
+samsungEntry.metrics = samsungScore.metrics;
+samsungEntry.summary = [
+  `부채비율 ${samsungRatios.부채비율.toFixed(1)}% — 안정적 재무구조`,
+  `유동비율 ${samsungRatios.유동비율.toFixed(1)}% — 단기지급능력 우수`,
+  `매출 전년 대비 ${samsungRatios.매출성장률.toFixed(1)}% 성장`,
+  `영업이익률 ${samsungRatios.영업이익률.toFixed(1)}%, ROE ${samsungRatios.ROE.toFixed(1)}%`,
+];
+
 let currentStock = MOCK_STOCKS[0];
+
+
 
 /* ============================================================
    화면 전환
