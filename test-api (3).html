@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>DART API 연동 테스트</title>
+<style>
+  body{ font-family: monospace; background:#0A0E13; color:#E9EDF2; padding:20px; }
+  h2{ color:#6E5BFF; }
+  input{ width:100%; padding:10px; margin:8px 0; background:#12171E; color:#fff; border:1px solid #232B35; border-radius:6px; }
+  button{ padding:10px 20px; background:#6E5BFF; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:600; }
+  pre{ background:#12171E; padding:14px; border-radius:8px; overflow-x:auto; white-space:pre-wrap; word-break:break-all; }
+  .ok{ color:#2ECC71; } .err{ color:#FF5C5C; }
+</style>
+</head>
+<body>
+  <h2>DART API 연동 테스트</h2>
+  <label>인증키 (crtfc_key)</label>
+  <input id="key" placeholder="발급받은 40자리 키 입력">
+  <label>기업 고유번호 (corp_code)</label>
+  <input id="corp" value="00126380" placeholder="삼성전자: 00126380">
+  <label>사업연도</label>
+  <input id="year" value="2024">
+  <button onclick="testFetch()">JS fetch()로 요청 테스트</button>
+
+  <div id="result" style="margin-top:20px;"></div>
+
+<script>
+async function testFetch(){
+  const key = document.getElementById('key').value.trim();
+  const corp = document.getElementById('corp').value.trim();
+  const year = document.getElementById('year').value.trim();
+  const resultDiv = document.getElementById('result');
+
+  if(!key){ resultDiv.innerHTML = '<span class="err">인증키를 입력해줘</span>'; return; }
+
+  const targetUrl = `https://opendart.fss.or.kr/api/fnlttSinglAcnt.json?crtfc_key=${key}&corp_code=${corp}&bsns_year=${year}&reprt_code=11011`;
+  const proxyUrl = `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(targetUrl)}`;
+
+  resultDiv.innerHTML = '요청 중... (프록시 경유)';
+
+  try{
+    const res = await fetch(proxyUrl);
+    const data = await res.json();
+    resultDiv.innerHTML = `
+      <p class="ok">✅ fetch 성공! (CORS 문제 없음)</p>
+      <p>status: ${data.status} / message: ${data.message}</p>
+      <p>받아온 항목 수: ${data.list ? data.list.length : 0}개</p>
+      <pre>${JSON.stringify(data.list ? data.list.slice(0,3) : data, null, 2)}</pre>
+    `;
+  }catch(err){
+    resultDiv.innerHTML = `
+      <p class="err">❌ fetch 실패</p>
+      <p class="err">에러 메시지: ${err.message}</p>
+      <p>→ 브라우저 개발자도구(F12) → Console 탭 확인해서 CORS 관련 에러인지 확인해줘</p>
+    `;
+  }
+}
+</script>
+</body>
+</html>
