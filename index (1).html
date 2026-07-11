@@ -1,0 +1,807 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StockView — 기업 재무 건전성 평가</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg: #0A0E13;
+    --surface: #12171E;
+    --surface-2: #1B222B;
+    --border: #232B35;
+    --text: #E9EDF2;
+    --text-dim: #8A94A3;
+    --text-faint: #576070;
+    --brand: #6E5BFF;
+    --brand-dim: #3D3480;
+    --amber: #FFB020;
+    --up: #2ECC71;
+    --down: #FF5C5C;
+    --font-display: 'Space Grotesk', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+  *{ box-sizing: border-box; margin:0; padding:0; }
+  html,body{ height:100%; }
+  body{
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    display:flex;
+    justify-content:center;
+    -webkit-font-smoothing: antialiased;
+  }
+  #app{
+    width:100%;
+    max-width: 430px;
+    min-height: 100vh;
+    background: var(--bg);
+    display:flex;
+    flex-direction:column;
+    position:relative;
+    border-left:1px solid var(--border);
+    border-right:1px solid var(--border);
+  }
+
+  /* Status bar mimic */
+  .statusbar{
+    display:flex; justify-content:space-between; align-items:center;
+    padding: 10px 20px 4px;
+    font-family: var(--font-mono);
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  /* Header */
+  .topbar{
+    padding: 6px 20px 14px;
+    display:flex; align-items:center; gap:10px;
+  }
+  .logo{
+    font-family: var(--font-display);
+    font-weight:700;
+    font-size: 19px;
+    letter-spacing: -0.02em;
+    display:flex; align-items:center; gap:8px;
+  }
+  .logo .mark{
+    width:22px; height:22px; border-radius:6px;
+    background: linear-gradient(135deg, var(--brand), #A78BFA);
+    display:flex; align-items:center; justify-content:center;
+    font-size:12px; font-weight:700; color:#fff;
+  }
+
+  .screen{ display:none; flex:1; flex-direction:column; padding: 0 20px 90px; overflow-y:auto; }
+  .screen.active{ display:flex; }
+
+  /* Search */
+  .search-box{
+    display:flex; align-items:center; gap:8px;
+    background: var(--surface);
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding: 11px 14px;
+    margin-bottom: 16px;
+  }
+  .search-box input{
+    background:none; border:none; outline:none; color:var(--text);
+    font-family: var(--font-body); font-size:14px; width:100%;
+  }
+  .search-box input::placeholder{ color: var(--text-faint); }
+  .search-box svg{ flex-shrink:0; color: var(--text-faint); }
+
+  .chip-row{ display:flex; gap:8px; margin-bottom:18px; overflow-x:auto; padding-bottom:2px; }
+  .chip-row::-webkit-scrollbar{ display:none; }
+  .chip{
+    font-family: var(--font-mono); font-size:12px; font-weight:500;
+    padding: 7px 14px; border-radius: 20px; white-space:nowrap;
+    background: var(--surface); color: var(--text-dim); border:1px solid var(--border);
+    cursor:pointer; transition: all .15s ease;
+  }
+  .chip.active{ background: var(--brand-dim); color:#C9BFFF; border-color: var(--brand); }
+
+  .section-label{
+    font-size:12px; color: var(--text-faint); font-weight:600;
+    letter-spacing: 0.04em; text-transform:uppercase;
+    margin: 4px 0 10px;
+  }
+
+  .stock-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding: 13px 4px; border-bottom:1px solid var(--border);
+    cursor:pointer;
+  }
+  .stock-row:last-child{ border-bottom:none; }
+  .stock-left{ display:flex; align-items:center; gap:12px; }
+  .stock-icon{
+    width:36px; height:36px; border-radius:10px;
+    display:flex; align-items:center; justify-content:center;
+    font-family: var(--font-display); font-weight:700; font-size:13px;
+    color:#fff; flex-shrink:0;
+  }
+
+  .recent-viewed-strip{ display:flex; gap:8px; margin-bottom:16px; overflow-x:auto; }
+  .recent-viewed-strip::-webkit-scrollbar{ display:none; }
+  .recent-chip{
+    font-family: var(--font-mono); font-size:12px; font-weight:600;
+    padding: 8px 14px; border-radius: 10px; white-space:nowrap; flex-shrink:0;
+    background: var(--surface-2); color: var(--text); border:1px solid var(--border);
+    cursor:pointer;
+  }
+  .stock-name{ font-size:14px; font-weight:600; color:var(--text); }
+  .stock-sector{ font-size:11px; color:var(--text-faint); margin-top:2px; }
+  .stock-right{ text-align:right; font-family: var(--font-mono); }
+  .stock-price{ font-size:14px; font-weight:600; }
+  .stock-change{ font-size:12px; margin-top:2px; }
+  .up{ color: var(--up); } .down{ color: var(--down); }
+
+  /* Detail screen */
+  .detail-header{ display:flex; align-items:center; gap:10px; padding: 6px 0 16px; }
+  .back-btn{
+    width:32px; height:32px; border-radius:50%; background: var(--surface);
+    border:1px solid var(--border); display:flex; align-items:center; justify-content:center;
+    cursor:pointer; color:var(--text-dim); flex-shrink:0;
+  }
+  .detail-title{ font-family: var(--font-display); font-weight:600; font-size:16px; flex:1; }
+  .star-btn{ color: var(--amber); cursor:pointer; }
+
+  .price-block{ margin-bottom: 18px; }
+  .price-main{ font-family: var(--font-mono); font-size: 30px; font-weight:700; letter-spacing:-0.01em; }
+  .price-change{ font-family: var(--font-mono); font-size: 13px; margin-top:4px; font-weight:600; }
+
+  .chart-wrap{ margin: 14px 0 22px; }
+
+  .card{
+    background: var(--surface); border:1px solid var(--border);
+    border-radius: 14px; padding: 16px; margin-bottom: 14px;
+  }
+  .card-title{ font-size:13px; font-weight:600; color:var(--text-dim); margin-bottom:10px; display:flex; align-items:center; justify-content:space-between; }
+  .card-title .chevron{ color: var(--text-faint); }
+
+  .news-item{ padding: 9px 0; border-bottom:1px solid var(--border); display:flex; gap:8px; align-items:flex-start; }
+  .news-item:last-child{ border-bottom:none; }
+  .news-badge{ font-size:10px; font-family: var(--font-mono); background: var(--surface-2); color:var(--text-dim); padding:2px 6px; border-radius:4px; flex-shrink:0; margin-top:2px; }
+  .news-text{ font-size:13px; color: var(--text); line-height:1.4; }
+
+  /* Score screen */
+  .score-hero{ display:flex; flex-direction:column; align-items:center; padding: 10px 0 8px; }
+  .score-grade{ font-family: var(--font-mono); font-size:12px; color: var(--brand); background: var(--brand-dim); padding:3px 10px; border-radius:20px; margin-bottom:10px; }
+  .gauge-wrap{ position:relative; width:200px; height:200px; }
+  .gauge-num{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .gauge-score{ font-family: var(--font-display); font-size:44px; font-weight:700; }
+  .gauge-label{ font-size:11px; color:var(--text-faint); margin-top:2px; letter-spacing:0.04em; }
+
+  .prob-row{ display:flex; align-items:center; gap:10px; margin: 14px 0 20px; padding: 12px 16px; background: var(--surface); border:1px solid var(--border); border-radius:12px; width:100%; }
+  .prob-label{ font-size:12px; color:var(--text-dim); flex:1; }
+  .prob-value{ font-family: var(--font-mono); font-weight:700; font-size:18px; color: var(--up); }
+
+  .metric-list{ display:flex; flex-direction:column; gap:12px; }
+  .metric-row{ display:flex; flex-direction:column; gap:5px; }
+  .metric-top{ display:flex; justify-content:space-between; font-size:12.5px; }
+  .metric-name{ color: var(--text-dim); }
+  .metric-val{ font-family: var(--font-mono); font-weight:600; }
+  .bar-track{ height:6px; background: var(--surface-2); border-radius:3px; overflow:hidden; }
+  .bar-fill{ height:100%; border-radius:3px; background: linear-gradient(90deg, var(--brand), #A78BFA); }
+
+  .summary-tags{ display:flex; flex-direction:column; gap:8px; }
+  .summary-tag{ font-size:13px; color:var(--text); display:flex; gap:8px; }
+  .summary-tag::before{ content:'•'; color: var(--brand); }
+
+  /* Compare screen */
+  .compare-select{ display:flex; gap:10px; margin-bottom:18px; }
+  .compare-slot{
+    flex:1; background: var(--surface); border:1px dashed var(--border);
+    border-radius:12px; padding:14px; text-align:center; cursor:pointer;
+  }
+  .compare-slot.filled{ border-style:solid; }
+  .compare-slot .name{ font-weight:600; font-size:13px; margin-bottom:2px; }
+  .compare-slot .price{ font-family:var(--font-mono); font-size:12px; color:var(--text-dim); }
+
+  .vs-table{ width:100%; border-collapse: collapse; margin-bottom:16px; }
+  .vs-table td{ padding: 10px 6px; font-size:12.5px; border-bottom:1px solid var(--border); }
+  .vs-table td:first-child{ color: var(--text-faint); font-family: var(--font-mono); font-size:11px; }
+  .vs-table td:nth-child(2), .vs-table td:nth-child(3){ font-family: var(--font-mono); font-weight:600; text-align:center; }
+
+  .verdict-row{ display:flex; gap:10px; margin-bottom: 6px; }
+  .verdict-card{ flex:1; border-radius:12px; padding:12px; }
+  .verdict-card.good{ background: rgba(46,204,113,0.1); border:1px solid rgba(46,204,113,0.3); }
+  .verdict-card.bad{ background: rgba(255,92,92,0.1); border:1px solid rgba(255,92,92,0.3); }
+  .verdict-name{ font-size:12px; font-weight:700; margin-bottom:4px; }
+  .verdict-desc{ font-size:11px; color: var(--text-dim); line-height:1.4; }
+
+  /* Bottom nav */
+  .bottom-nav{
+    position:absolute; bottom:0; left:0; right:0;
+    display:flex; justify-content:space-around; align-items:center;
+    background: rgba(18,23,30,0.92); backdrop-filter: blur(12px);
+    border-top:1px solid var(--border); padding: 10px 4px 14px;
+  }
+  .nav-item{ display:flex; flex-direction:column; align-items:center; gap:3px; color: var(--text-faint); cursor:pointer; font-size:10px; font-weight:500; }
+  .nav-item.active{ color: var(--brand); }
+  .nav-item svg{ width:20px; height:20px; }
+
+  /* Guide screen */
+  .plan-card{ background: var(--surface); border:1px solid var(--border); border-radius:14px; padding:16px; margin-bottom:12px; }
+  .plan-name{ font-family: var(--font-display); font-weight:700; font-size:15px; margin-bottom:6px; }
+  .plan-name.pro{ color: var(--amber); }
+  .plan-desc{ font-size:12px; color: var(--text-dim); line-height:1.5; }
+
+  ::-webkit-scrollbar{ width:0; height:0; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div class="statusbar">
+    <span>9:41</span>
+    <span>StockView Prototype</span>
+  </div>
+
+  <div class="topbar">
+    <div class="logo"><span class="mark">SV</span>STOCKVIEW</div>
+  </div>
+
+  <!-- HOME -->
+  <div class="screen active" id="screen-home">
+    <div class="search-box">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input placeholder="기업 검색" id="search-input">
+    </div>
+    <div class="chip-row" id="sector-chips">
+      <div class="chip active" data-sector="전체">전체</div>
+      <div class="chip" data-sector="IT">IT</div>
+      <div class="chip" data-sector="반도체">반도체</div>
+      <div class="chip" data-sector="에너지">에너지</div>
+      <div class="chip" data-sector="AI">AI</div>
+    </div>
+    <div id="recent-viewed-strip" class="recent-viewed-strip" style="display:none;"></div>
+    <div class="section-label">최근 많이 본 종목</div>
+    <div id="stock-list"></div>
+  </div>
+
+  <!-- DETAIL -->
+  <div class="screen" id="screen-detail">
+    <div class="detail-header">
+      <div class="back-btn" onclick="goTo('home')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+      </div>
+      <div class="detail-title" id="detail-name">삼성전자</div>
+      <div class="star-btn">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 21 12 17.77 5.82 21 7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+      </div>
+    </div>
+
+    <div class="price-block">
+      <div class="price-main" id="detail-price">$98,509.75</div>
+      <div class="price-change up" id="detail-change">+1700.25 (9.77%)</div>
+    </div>
+
+    <div class="chart-wrap">
+      <svg id="detail-chart" width="100%" height="120" viewBox="0 0 390 120" preserveAspectRatio="none"></svg>
+    </div>
+
+    <div class="card" onclick="goTo('score')" style="cursor:pointer;">
+      <div class="card-title">재무평가 보기 <span class="chevron">›</span></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">관련 뉴스</div>
+      <div id="news-list"></div>
+    </div>
+  </div>
+
+  <!-- SCORE -->
+  <div class="screen" id="screen-score">
+    <div class="detail-header">
+      <div class="back-btn" onclick="goTo('detail')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+      </div>
+      <div class="detail-title" id="score-name">삼성전자 재무평가</div>
+    </div>
+
+    <div class="score-hero">
+      <div class="score-grade" id="score-grade">우수</div>
+      <div class="gauge-wrap">
+        <svg width="200" height="200" viewBox="0 0 200 200">
+          <circle cx="100" cy="100" r="86" fill="none" stroke="#1B222B" stroke-width="14"/>
+          <circle id="score-arc" cx="100" cy="100" r="86" fill="none" stroke="url(#scoreGrad)" stroke-width="14" stroke-linecap="round" stroke-dasharray="540" stroke-dashoffset="540" transform="rotate(-90 100 100)"/>
+          <defs>
+            <linearGradient id="scoreGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#6E5BFF"/>
+              <stop offset="100%" stop-color="#A78BFA"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <div class="gauge-num">
+          <div class="gauge-score" id="gauge-score">87</div>
+          <div class="gauge-label">/ 100점</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="prob-row">
+      <div class="prob-label">주가 상승 가능성</div>
+      <div class="prob-value" id="prob-value">72%</div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">분석 정리</div>
+      <div class="summary-tags" id="summary-tags"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">세부 지표</div>
+      <div class="metric-list" id="metric-list"></div>
+    </div>
+  </div>
+
+  <!-- COMPARE -->
+  <div class="screen" id="screen-compare">
+    <div class="section-label" style="margin-top:8px;">기업 비교</div>
+    <div class="compare-select">
+      <div class="compare-slot filled">
+        <div class="name">삼성전자</div>
+        <div class="price">2,702 <span class="up">+9.77%</span></div>
+      </div>
+      <div class="compare-slot filled">
+        <div class="name">APPLE</div>
+        <div class="price">2,232 <span class="down">-13.00%</span></div>
+      </div>
+    </div>
+
+    <table class="vs-table">
+      <tr><td>재무 건전성</td><td class="up">87점</td><td class="down">54점</td></tr>
+      <tr><td>부채비율</td><td>32.3%</td><td>67.8%</td></tr>
+      <tr><td>ROE</td><td>11.4%</td><td>2.1%</td></tr>
+      <tr><td>FCF</td><td>$36.9B</td><td>$5.8B</td></tr>
+      <tr><td>기준금리 영향도</td><td>3.50%↑</td><td>3.50%↑</td></tr>
+      <tr><td>CPI/PPI</td><td>113.2/123.4↑</td><td>113.2/123.4↑</td></tr>
+    </table>
+
+    <div class="section-label">종합 분석 요약</div>
+    <div class="verdict-row">
+      <div class="verdict-card good">
+        <div class="verdict-name up">삼성전자</div>
+        <div class="verdict-desc">재무 건전성 매우 우수<br>→ 안정적인 주가 흐름 기대</div>
+      </div>
+      <div class="verdict-card bad">
+        <div class="verdict-name down">APPLE</div>
+        <div class="verdict-desc">재무 리스크 주의 필요<br>→ 변동성 확대 가능성</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GUIDE -->
+  <div class="screen" id="screen-guide">
+    <div class="section-label" style="margin-top:8px;">구독 플랜</div>
+    <div class="plan-card">
+      <div class="plan-name">Free</div>
+      <div class="plan-desc">월 5개 기업 검색 · 최근 1개월 주가 · 기본 점수만 제공</div>
+    </div>
+    <div class="plan-card">
+      <div class="plan-name">Basic</div>
+      <div class="plan-desc">월 20개 기업 검색 · 최근 1년 주가 · 세부 점수 · 산업 내 비교</div>
+    </div>
+    <div class="plan-card">
+      <div class="plan-name">Premium</div>
+      <div class="plan-desc">월 50개 기업 · 3~5년 데이터 · 상관관계 분석 · 리스크 경고</div>
+    </div>
+    <div class="plan-card">
+      <div class="plan-name pro">Pro</div>
+      <div class="plan-desc">무제한 검색 · 5년 이상 데이터 · 회귀분석 · API 제공 · 백테스트</div>
+    </div>
+  </div>
+
+  <!-- PROFILE (placeholder) -->
+  <div class="screen" id="screen-profile">
+    <div class="section-label" style="margin-top:8px;">프로필</div>
+    <div class="card"><div class="card-title">아직 준비 중인 화면입니다</div></div>
+  </div>
+
+  <div class="bottom-nav">
+    <div class="nav-item active" data-screen="home" onclick="goTo('home')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      Home
+    </div>
+    <div class="nav-item" data-screen="compare" onclick="goTo('compare')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg>
+      Compare
+    </div>
+    <div class="nav-item" data-screen="guide" onclick="goTo('guide')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      Guide
+    </div>
+    <div class="nav-item" data-screen="detail" onclick="goTo('detail')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
+      Market
+    </div>
+    <div class="nav-item" data-screen="profile" onclick="goTo('profile')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M6 21v-1a6 6 0 0 1 12 0v1"/></svg>
+      Profile
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ============================================================
+   목업 데이터 (추후 DART/ECOS API 응답으로 교체 예정)
+   ============================================================ */
+const MOCK_STOCKS = [
+  { id:'samsung', name:'삼성전자', sector:'IT', color:'#1428A0', initial:'SE',
+    price:'2,702', change:'+9.77%', up:true,
+    priceHistory:[94279,94800,95200,94600,95900,96200,95700,96500,96879,97200,97800,98509],
+    score:87, grade:'우수', prob:72,
+    metrics:{ 안정성:82, 수익성:74, 성장성:69, 유동성:88 },
+    summary:['매출 성장 지속','부채 비율 감소','우상향 트렌드 지속','글로벌 생산 거점 확보'],
+    news:[
+      {tag:'단독', text:'삼성전자, 오픈AI도 몰렸다…8억Gb HBM4'},
+      {tag:'속보', text:'삼성전자 85만주, 1000억 고위공직자도 보유'},
+      {tag:'시황', text:'삼성전자 500억 수익 이세용 평판보도자'},
+    ]},
+  { id:'sk', name:'SK하이닉스', sector:'반도체', color:'#EE3125', initial:'SK',
+    price:'2,439', change:'-21.00%', up:false,
+    priceHistory:[3100,3050,2980,2900,2850,2760,2700,2650,2580,2510,2460,2439],
+    score:61, grade:'양호', prob:48,
+    metrics:{ 안정성:58, 수익성:65, 성장성:71, 유동성:52 },
+    summary:['메모리 가격 하락 압력','설비투자 부담 증가','중장기 수요 회복 기대'],
+    news:[
+      {tag:'시황', text:'SK하이닉스, HBM 공급 계약 연장 논의'},
+      {tag:'분석', text:'메모리 반도체 업황 반등 시점 논쟁'},
+    ]},
+  { id:'meta', name:'Meta', sector:'AI', color:'#0866FF', initial:'M',
+    price:'1,456', change:'-13.00%', up:false,
+    priceHistory:[1800,1750,1700,1650,1600,1580,1550,1520,1500,1480,1460,1456],
+    score:70, grade:'양호', prob:55,
+    metrics:{ 안정성:65, 수익성:80, 성장성:74, 유동성:60 },
+    summary:['광고 매출 둔화 우려','AI 투자 지출 확대','장기 성장 잠재력 유효'],
+    news:[
+      {tag:'시황', text:'Meta, AI 인프라 투자 규모 재조정 시사'},
+    ]},
+  { id:'apple', name:'APPLE', sector:'IT', color:'#A2AAAD', initial:'',
+    price:'2,232', change:'+7.67%', up:true,
+    priceHistory:[2000,2020,2050,2080,2100,2130,2150,2170,2190,2210,2225,2232],
+    score:54, grade:'주의', prob:41,
+    metrics:{ 안정성:60, 수익성:52, 성장성:38, 유동성:66 },
+    summary:['제품 매출 성장 둔화','서비스 부문 견조','부채비율 상대적 높음'],
+    news:[
+      {tag:'시황', text:'Apple, 신제품 출시 지연 우려 제기'},
+      {tag:'분석', text:'서비스 매출 비중 확대 지속'},
+    ]},
+  { id:'nvidia', name:'NVIDIA', sector:'AI', color:'#76B900', initial:'N',
+    price:'2,900', change:'+6.47%', up:true,
+    priceHistory:[2400,2450,2500,2550,2600,2650,2700,2750,2800,2830,2870,2900],
+    score:91, grade:'매우 우수', prob:81,
+    metrics:{ 안정성:88, 수익성:93, 성장성:95, 유동성:80 },
+    summary:['AI 반도체 수요 폭발적 증가','압도적 시장 점유율 유지','밸류에이션 부담 존재'],
+    news:[
+      {tag:'단독', text:'NVIDIA, 차세대 GPU 로드맵 공개'},
+    ]},
+  { id:'tesla', name:'TESLA', sector:'에너지', color:'#CC0000', initial:'T',
+    price:'1,902', change:'+9.55%', up:true,
+    priceHistory:[1600,1620,1650,1700,1680,1720,1750,1780,1820,1850,1880,1902],
+    score:63, grade:'양호', prob:58,
+    metrics:{ 안정성:55, 수익성:60, 성장성:82, 유동성:57 },
+    summary:['전기차 판매 성장세 둔화','에너지 저장 사업 확대','경쟁 심화로 마진 압박'],
+    news:[
+      {tag:'시황', text:'테슬라, 에너지 저장장치 매출 급증'},
+    ]},
+];
+
+/* ============================================================
+   실제 DART 데이터 (2024년 연결재무제표 기준, 삼성전자)
+   출처: opendart.fss.or.kr API 직접 조회 결과
+   ============================================================ */
+const REAL_FINANCIALS = {
+  samsung: {
+    부채총계: 112339878000000,
+    자본총계: 402192070000000,
+    유동자산: 227062266000000,
+    유동부채: 93326299000000,
+    매출액: 300870903000000,
+    매출액_전년: 258935494000000,
+    영업이익: 32725961000000,
+    당기순이익: 34451351000000,
+  },
+  skhynix: {
+    부채총계: 45939505000000,
+    자본총계: 73915704000000,
+    유동자산: 42278887000000,
+    유동부채: 24965444000000,
+    매출액: 66192960000000,
+    매출액_전년: 32765719000000,
+    영업이익: 23467319000000,
+    당기순이익: 19796902000000,
+  }
+};
+
+/* ============================================================
+   재무비율 계산
+   ============================================================ */
+function calcRatios(f){
+  const 부채비율 = (f.부채총계 / f.자본총계) * 100;
+  const 유동비율 = (f.유동자산 / f.유동부채) * 100;
+  const 영업이익률 = (f.영업이익 / f.매출액) * 100;
+  const ROE = (f.당기순이익 / f.자본총계) * 100;
+  const 매출성장률 = ((f.매출액 - f.매출액_전년) / f.매출액_전년) * 100;
+  return { 부채비율, 유동비율, 영업이익률, ROE, 매출성장률 };
+}
+
+/* 시그모이드 함수: 1 / (1 + e^-x)  — 수학동아리 발표 내용과 동일한 함수 사용 */
+function sigmoid(x){
+  return 1 / (1 + Math.exp(-x));
+}
+
+function clamp(v, min, max){ return Math.max(min, Math.min(max, v)); }
+
+/* ============================================================
+   재무비율 → 건전성 점수 / 상승확률 계산
+   각 항목을 0~100 점수로 정규화한 뒤, 가중 합산하여 종합 점수 산출.
+   상승 가능성(%)은 정규화 이전의 원시 지표들을 선형결합(z)한 뒤
+   시그모이드 함수에 통과시켜 0~100% 확률로 변환.
+   ============================================================ */
+function calcScore(ratios){
+  const 안정성 = clamp(100 - ratios.부채비율 * 0.8, 0, 100);
+  const 유동성 = clamp(ratios.유동비율 / 2.5, 0, 100);
+  const 수익성 = clamp(ratios.ROE * 5 + ratios.영업이익률 * 3, 0, 100);
+  const 성장성 = clamp(ratios.매출성장률 * 4, 0, 100);
+
+  const 건전성점수 = Math.round((안정성 + 유동성 + 수익성 + 성장성) / 4);
+
+  // 시그모이드 기반 상승 가능성 계산 (가중치는 임의 설정한 예시 모델)
+  // 매출성장률이 지나치게 크면(전년도 적자에서 급반등한 경우 등) z값이 과도하게 커져
+  // 확률이 100%에 가깝게 포화되는 문제가 있어, 성장률 항은 50%를 상한으로 clamp함
+  const z = 0.15*ratios.ROE + 0.10*ratios.영업이익률 + 0.08*clamp(ratios.매출성장률, -50, 50)
+           - 0.05*ratios.부채비율 + 0.02*ratios.유동비율 - 6;
+  const 상승가능성 = Math.round(sigmoid(z) * 100);
+
+  let grade = '주의';
+  if(건전성점수 >= 85) grade = '매우 우수';
+  else if(건전성점수 >= 70) grade = '우수';
+  else if(건전성점수 >= 50) grade = '양호';
+
+  return {
+    score: 건전성점수, grade, prob: 상승가능성,
+    metrics: { 안정성: Math.round(안정성), 수익성: Math.round(수익성), 성장성: Math.round(성장성), 유동성: Math.round(유동성) }
+  };
+}
+
+/* 삼성전자, SK하이닉스는 실제 DART 데이터로 덮어쓰기 (나머지 기업은 아직 목업) */
+const samsungRatios = calcRatios(REAL_FINANCIALS.samsung);
+const samsungScore = calcScore(samsungRatios);
+const samsungEntry = MOCK_STOCKS.find(s => s.id === 'samsung');
+samsungEntry.score = samsungScore.score;
+samsungEntry.grade = samsungScore.grade;
+samsungEntry.prob = samsungScore.prob;
+samsungEntry.metrics = samsungScore.metrics;
+samsungEntry.summary = [
+  `부채비율 ${samsungRatios.부채비율.toFixed(1)}% — 안정적 재무구조`,
+  `유동비율 ${samsungRatios.유동비율.toFixed(1)}% — 단기지급능력 우수`,
+  `매출 전년 대비 ${samsungRatios.매출성장률.toFixed(1)}% 성장`,
+  `영업이익률 ${samsungRatios.영업이익률.toFixed(1)}%, ROE ${samsungRatios.ROE.toFixed(1)}%`,
+];
+
+const skRatios = calcRatios(REAL_FINANCIALS.skhynix);
+const skScore = calcScore(skRatios);
+const skEntry = MOCK_STOCKS.find(s => s.id === 'sk');
+skEntry.score = skScore.score;
+skEntry.grade = skScore.grade;
+skEntry.prob = skScore.prob;
+skEntry.metrics = skScore.metrics;
+skEntry.summary = [
+  `부채비율 ${skRatios.부채비율.toFixed(1)}% — 삼성전자 대비 부채 부담 높음`,
+  `유동비율 ${skRatios.유동비율.toFixed(1)}%`,
+  `매출 전년 대비 ${skRatios.매출성장률.toFixed(1)}% 성장 — 전년도 적자에서 급반등`,
+  `영업이익률 ${skRatios.영업이익률.toFixed(1)}%, ROE ${skRatios.ROE.toFixed(1)}%`,
+];
+
+let currentStock = MOCK_STOCKS[0];
+
+
+
+/* ============================================================
+   화면 전환
+   ============================================================ */
+function goTo(screen){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+screen).classList.add('active');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const navMap = { home:'home', compare:'compare', guide:'guide', detail:'detail', score:'detail', profile:'profile' };
+  const navTarget = document.querySelector(`.nav-item[data-screen="${navMap[screen]}"]`);
+  if(navTarget) navTarget.classList.add('active');
+}
+
+function openStock(id){
+  currentStock = MOCK_STOCKS.find(s=>s.id===id);
+  recentViewQueue.enqueue(id);
+  renderRecentViewed();
+  renderDetail();
+  goTo('detail');
+}
+
+/* ============================================================
+   원형 큐(Circular Queue) — 최근 본 기업 관리
+   고정 크기(capacity) 버퍼에 방문 기록을 순환 저장.
+   버퍼가 가득 차면 front 포인터를 한 칸 이동시켜 가장 오래된
+   기록을 자연스럽게 덮어씀 (선형 큐의 앞쪽 공간 낭비 문제를
+   인덱스 순환 방식으로 보완).
+   ============================================================ */
+class CircularQueue{
+  constructor(capacity){
+    this.capacity = capacity;
+    this.buffer = new Array(capacity).fill(null);
+    this.front = 0;   // 가장 오래된 항목의 위치
+    this.rear = 0;    // 다음 항목이 들어갈 위치
+    this.size = 0;
+  }
+  enqueue(item){
+    this.buffer[this.rear] = item;
+    this.rear = (this.rear + 1) % this.capacity;
+    if(this.size < this.capacity){
+      this.size++;
+    } else {
+      // 버퍼가 가득 찬 경우, front를 한 칸 순환 이동시켜
+      // 가장 오래된 기록을 큐에서 밀어냄
+      this.front = (this.front + 1) % this.capacity;
+    }
+  }
+  toArray(){
+    // 최신 방문 순서대로 반환
+    const result = [];
+    let idx = (this.rear - 1 + this.capacity) % this.capacity;
+    for(let i=0; i<this.size; i++){
+      result.push(this.buffer[idx]);
+      idx = (idx - 1 + this.capacity) % this.capacity;
+    }
+    return result;
+  }
+}
+
+const recentViewQueue = new CircularQueue(4);
+
+function renderRecentViewed(){
+  const container = document.getElementById('recent-viewed-strip');
+  const ids = recentViewQueue.toArray();
+  if(ids.length === 0){ container.style.display = 'none'; return; }
+  container.style.display = 'flex';
+  container.innerHTML = ids.map(id=>{
+    const s = MOCK_STOCKS.find(x=>x.id===id);
+    return `<div class="recent-chip" onclick="openStock('${id}')">${s.name}</div>`;
+  }).join('');
+}
+
+/* ============================================================
+   렌더링
+   ============================================================ */
+function renderStockList(filterSector){
+  const list = document.getElementById('stock-list');
+  list.innerHTML = '';
+  const data = (!filterSector || filterSector==='전체') ? MOCK_STOCKS : MOCK_STOCKS.filter(s=>s.sector===filterSector);
+  data.forEach(s=>{
+    const row = document.createElement('div');
+    row.className = 'stock-row';
+    row.onclick = ()=>openStock(s.id);
+    row.innerHTML = `
+      <div class="stock-left">
+        <div class="stock-icon" style="background:${s.color}">${s.initial}</div>
+        <div>
+          <div class="stock-name">${s.name}</div>
+          <div class="stock-sector">${s.sector} · 건전성 ${s.score}점</div>
+        </div>
+      </div>
+      <div class="stock-right">
+        <div class="stock-price">${s.price}</div>
+        <div class="stock-change ${s.up?'up':'down'}">${s.change}</div>
+      </div>`;
+    list.appendChild(row);
+  });
+}
+
+function buildSparkline(history, w=390, h=120){
+  const min = Math.min(...history), max = Math.max(...history);
+  const range = max - min || 1;
+  const step = w / (history.length - 1);
+  const points = history.map((v,i)=>{
+    const x = i*step;
+    const y = h - ((v-min)/range)*(h-20) - 10;
+    return `${x},${y}`;
+  }).join(' ');
+  const isUp = history[history.length-1] >= history[0];
+  const color = isUp ? '#2ECC71' : '#FF5C5C';
+  const areaPoints = `0,${h} ${points} ${w},${h}`;
+  return `
+    <defs>
+      <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.25"/>
+        <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
+      </linearGradient>
+    </defs>
+    <polygon points="${areaPoints}" fill="url(#areaGrad)"/>
+    <polyline points="${points}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+  `;
+}
+
+function renderDetail(){
+  const s = currentStock;
+  document.getElementById('detail-name').textContent = s.name;
+  document.getElementById('detail-price').textContent = '$' + s.priceHistory[s.priceHistory.length-1].toLocaleString();
+  const changeEl = document.getElementById('detail-change');
+  changeEl.textContent = s.change;
+  changeEl.className = 'price-change ' + (s.up?'up':'down');
+
+  document.getElementById('detail-chart').innerHTML = buildSparkline(s.priceHistory);
+
+  const newsList = document.getElementById('news-list');
+  newsList.innerHTML = s.news.map(n=>`
+    <div class="news-item">
+      <span class="news-badge">${n.tag}</span>
+      <span class="news-text">${n.text}</span>
+    </div>`).join('');
+
+  renderScore();
+}
+
+function renderScore(){
+  const s = currentStock;
+  document.getElementById('score-name').textContent = s.name + ' 재무평가';
+  document.getElementById('score-grade').textContent = s.grade;
+  document.getElementById('gauge-score').textContent = s.score;
+  document.getElementById('prob-value').textContent = s.prob + '%';
+
+  const circumference = 2 * Math.PI * 86 * (270/360); // 270도 아크
+  const arc = document.getElementById('score-arc');
+  const fullDash = 2 * Math.PI * 86;
+  arc.setAttribute('stroke-dasharray', fullDash);
+  const offset = fullDash - (fullDash * (s.score/100) * 0.75);
+  requestAnimationFrame(()=>{ arc.style.transition = 'stroke-dashoffset 1s ease'; arc.setAttribute('stroke-dashoffset', offset); });
+
+  document.getElementById('summary-tags').innerHTML = s.summary.map(t=>`<div class="summary-tag">${t}</div>`).join('');
+
+  const metricList = document.getElementById('metric-list');
+  metricList.innerHTML = Object.entries(s.metrics).map(([name,val])=>`
+    <div class="metric-row">
+      <div class="metric-top"><span class="metric-name">${name}</span><span class="metric-val">${val}점</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${val}%"></div></div>
+    </div>`).join('');
+}
+
+/* ============================================================
+   이벤트 바인딩
+   ============================================================ */
+document.querySelectorAll('.chip').forEach(chip=>{
+  chip.addEventListener('click', ()=>{
+    document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+    chip.classList.add('active');
+    renderStockList(chip.dataset.sector);
+  });
+});
+
+document.getElementById('search-input').addEventListener('input', (e)=>{
+  const q = e.target.value.trim();
+  const list = document.getElementById('stock-list');
+  if(!q){ renderStockList('전체'); return; }
+  const filtered = MOCK_STOCKS.filter(s=>s.name.toLowerCase().includes(q.toLowerCase()));
+  list.innerHTML = '';
+  filtered.forEach(s=>{
+    const row = document.createElement('div');
+    row.className = 'stock-row';
+    row.onclick = ()=>openStock(s.id);
+    row.innerHTML = `
+      <div class="stock-left">
+        <div class="stock-icon" style="background:${s.color}">${s.initial}</div>
+        <div><div class="stock-name">${s.name}</div><div class="stock-sector">${s.sector} · 건전성 ${s.score}점</div></div>
+      </div>
+      <div class="stock-right"><div class="stock-price">${s.price}</div><div class="stock-change ${s.up?'up':'down'}">${s.change}</div></div>`;
+    list.appendChild(row);
+  });
+});
+
+/* 초기 렌더 */
+renderStockList('전체');
+renderDetail();
+</script>
+</body>
+</html>
